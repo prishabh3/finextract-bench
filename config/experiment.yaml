@@ -1,0 +1,23 @@
+# Experiment configuration defaults.
+# Override via CLI flags or environment variables.
+
+dataset:
+  # Which document set to use: 'sample' or 'full'
+  default: sample
+  ground_truth_file: data/ground_truth/financial_metrics.csv
+
+pipelines:
+  - text_only
+  - layout_aware
+  - hybrid
+
+evaluation:
+  tolerances:
+    exact: 0.0
+    tight: 0.005   # 0.5%
+    standard: 0.01 # 1%
+    loose: 0.05    # 5%
+
+output:
+  results_dir: reports/results
+  plots_dir: reports/plots

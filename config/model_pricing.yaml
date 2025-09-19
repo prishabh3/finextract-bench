@@ -1,0 +1,58 @@
+# Model pricing configuration for FinExtract-Bench cost estimation.
+#
+# All costs are in USD per 1 million tokens.
+# Update these values as provider pricing changes.
+#
+# Sources (as of 2024-2025 — verify before use):
+#   OpenAI:    https://openai.com/pricing
+#   Anthropic: https://www.anthropic.com/pricing
+#   Google:    https://ai.google.dev/pricing
+
+models:
+  # ── OpenAI ────────────────────────────────────────────────
+  gpt-4o:
+    input_cost_per_1m_tokens: 2.50
+    output_cost_per_1m_tokens: 10.00
+
+  gpt-4o-mini:
+    input_cost_per_1m_tokens: 0.15
+    output_cost_per_1m_tokens: 0.60
+
+  gpt-4-turbo:
+    input_cost_per_1m_tokens: 10.00
+    output_cost_per_1m_tokens: 30.00
+
+  gpt-3.5-turbo:
+    input_cost_per_1m_tokens: 0.50
+    output_cost_per_1m_tokens: 1.50
+
+  # ── Anthropic ─────────────────────────────────────────────
+  claude-3-5-sonnet:
+    input_cost_per_1m_tokens: 3.00
+    output_cost_per_1m_tokens: 15.00
+
+  claude-3-5-haiku:
+    input_cost_per_1m_tokens: 0.80
+    output_cost_per_1m_tokens: 4.00
+
+  claude-3-opus:
+    input_cost_per_1m_tokens: 15.00
+    output_cost_per_1m_tokens: 75.00
+
+  # ── Google ────────────────────────────────────────────────
+  gemini-1.5-pro:
+    input_cost_per_1m_tokens: 3.50
+    output_cost_per_1m_tokens: 10.50
+
+  gemini-1.5-flash:
+    input_cost_per_1m_tokens: 0.075
+    output_cost_per_1m_tokens: 0.30
+
+  gemini-2.0-flash:
+    input_cost_per_1m_tokens: 0.10
+    output_cost_per_1m_tokens: 0.40
+
+  # ── Mock provider (zero cost) ─────────────────────────────
+  mock-model-v1:
+    input_cost_per_1m_tokens: 0.0
+    output_cost_per_1m_tokens: 0.0
