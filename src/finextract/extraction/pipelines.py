@@ -33,7 +33,7 @@ from finextract.validation.schemas import ExtractionMethod, FinancialReport, Pro
 logger = logging.getLogger(__name__)
 
 # Maximum characters sent to the LLM (avoid context window overruns)
-MAX_CONTEXT_CHARS = 12_000
+MAX_CONTEXT_CHARS = 30_000
 
 # Financial section keywords used to identify relevant pages/tables
 _INCOME_KEYWORDS = [
@@ -227,22 +227,63 @@ def run_hybrid(
 def _select_text_context(doc: ParsedDocument) -> str:
     """
     Select relevant pages based on financial keywords and concatenate their text.
+
+    Prioritizes pages that contain actual financial statements (with dollar signs
+    and numeric data) over prose pages that merely mention financial terms.
     """
-    relevant_pages = []
-    all_text_pages = []
+    # Financial statement header keywords (high priority)
+    _STATEMENT_HEADERS = [
+        "consolidated statements of operations",
+        "consolidated balance sheets",
+        "consolidated statements of cash flows",
+        "consolidated statements of comprehensive income",
+        "statements of operations",
+    ]
+
+    high_priority_pages: list[tuple[int, str]] = []  # (page_number, text)
+    medium_priority_pages: list[tuple[int, str]] = []
+    low_priority_pages: list[tuple[int, str]] = []
 
     for page in doc.pages:
-        text_lower = page.full_text.lower()
-        all_text_pages.append(page.full_text)
-        is_relevant = any(kw in text_lower for kw in _INCOME_KEYWORDS + _BALANCE_KEYWORDS)
-        if is_relevant:
-            relevant_pages.append(page.full_text)
+        text = page.full_text
+        text_lower = text.lower()
 
-    # Use relevant pages if found, fallback to all pages
-    source_pages = relevant_pages if relevant_pages else all_text_pages
-    context = "\n\n--- PAGE BREAK ---\n\n".join(source_pages)
+        # Count dollar signs and numbers — financial tables have lots of these
+        dollar_count = text.count("$")
+        has_statement_header = any(h in text_lower for h in _STATEMENT_HEADERS)
+        has_financial_keywords = any(
+            kw in text_lower for kw in _INCOME_KEYWORDS + _BALANCE_KEYWORDS
+        )
 
-    return context[:MAX_CONTEXT_CHARS]
+        if has_statement_header and dollar_count >= 3:
+            # Actual financial statement page (income statement, balance sheet)
+            high_priority_pages.append((page.page_number, text))
+        elif has_financial_keywords and dollar_count >= 2:
+            # Page with financial data and keywords
+            medium_priority_pages.append((page.page_number, text))
+        elif has_financial_keywords:
+            # Prose page mentioning financial terms
+            low_priority_pages.append((page.page_number, text))
+
+    # Build context: high priority first, then medium, then low
+    context_parts: list[str] = []
+    total_chars = 0
+
+    for _, text in high_priority_pages + medium_priority_pages + low_priority_pages:
+        if total_chars + len(text) > MAX_CONTEXT_CHARS:
+            remaining = MAX_CONTEXT_CHARS - total_chars
+            if remaining > 500:
+                context_parts.append(text[:remaining])
+            break
+        context_parts.append(text)
+        total_chars += len(text)
+
+    if not context_parts:
+        # Fallback: just use all pages
+        all_text = "\n\n".join(p.full_text for p in doc.pages)
+        return all_text[:MAX_CONTEXT_CHARS]
+
+    return "\n\n--- PAGE BREAK ---\n\n".join(context_parts)
 
 
 def _select_layout_context(doc: ParsedDocument) -> str:

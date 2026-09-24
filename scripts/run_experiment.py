@@ -10,11 +10,9 @@ import argparse
 import json
 import logging
 
-from sqlalchemy.orm import Session
-
 from finextract.config.settings import settings
 from finextract.experiments.runner import ExperimentConfig, run_experiment
-from finextract.storage.repository import get_engine
+from finextract.storage.repository import get_session, init_db
 
 
 def main() -> None:
@@ -59,13 +57,11 @@ def main() -> None:
     )
 
     # Ensure DB tables exist
-    from finextract.storage.models import Base
-    engine = get_engine()
-    Base.metadata.create_all(engine)
+    init_db()
 
     # Run the experiment
     logger.info("Starting experiment runner...")
-    with Session(engine) as session:
+    with get_session() as session:
         result = run_experiment(config, session)
 
     # Output summary

@@ -15,6 +15,8 @@ from typing import Any
 
 import yaml
 
+from finextract.config.settings import settings
+
 logger = logging.getLogger(__name__)
 
 # ============================================================
@@ -66,9 +68,7 @@ class PricingRegistry:
     def __init__(self, pricing_file: Path | None = None) -> None:
         self._pricing: dict[str, dict[str, float]] = {}
         if pricing_file is None:
-            pricing_file = (
-                Path(__file__).resolve().parents[4] / "config" / "model_pricing.yaml"
-            )
+            pricing_file = settings.project_root / "config" / "model_pricing.yaml"
         self._load(pricing_file)
 
     def _load(self, path: Path) -> None:

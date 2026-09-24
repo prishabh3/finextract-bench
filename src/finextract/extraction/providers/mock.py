@@ -14,13 +14,13 @@ Design:
 
 The mock uses a keyword → field mapping to identify values:
 
-  "Revenue"             → revenue
-  "Net Income"          → net_income
-  "Operating Income"    → operating_income
-  "Total Assets"        → total_assets
-  "Total Liabilities"   → total_liabilities
-  "Cash and Cash"       → cash_and_equivalents
-  "Earnings Per Share"  → eps
+  "Revenue" / "Net Sales"          → revenue
+  "Net Income" / "Net Earnings"    → net_income
+  "Operating Income"               → operating_income
+  "Total Assets"                   → total_assets
+  "Total Liabilities"              → total_liabilities
+  "Cash and Cash"                  → cash_and_equivalents
+  "Earnings Per Share"             → eps
 """
 
 from __future__ import annotations
@@ -38,32 +38,84 @@ logger = logging.getLogger(__name__)
 # ── Keyword → field mapping (ordered from most specific to least) ──────
 _FIELD_KEYWORDS: list[tuple[str, str]] = [
     # (search phrase, field_name)
+    # Cash
+    ("Cash, Cash Equivalents and Restricted Cash", "cash_and_equivalents"),
     ("Cash and Cash Equivalents", "cash_and_equivalents"),
     ("Cash and Equivalents", "cash_and_equivalents"),
     ("Cash & Cash Equivalents", "cash_and_equivalents"),
+    ("Cash, cash equivalents", "cash_and_equivalents"),
+    ("Cash and short-term investments", "cash_and_equivalents"),
+    # EPS — order matters: most specific first
+    ("Diluted earnings per share", "eps"),
     ("Earnings Per Share (Diluted)", "eps"),
-    ("Earnings Per Share", "eps"),
     ("EPS (Diluted)", "eps"),
     ("Diluted EPS", "eps"),
+    ("Basic and diluted net income per share", "eps"),
+    ("Net income per share", "eps"),
+    ("Earnings Per Share", "eps"),
+    ("Earnings per share", "eps"),
+    # Operating Income
     ("Operating Income", "operating_income"),
     ("Income from Operations", "operating_income"),
+    ("Operating income/(loss)", "operating_income"),
+    ("Income from operations", "operating_income"),
+    # Assets & Liabilities (must come before simpler patterns)
     ("Total Assets", "total_assets"),
+    ("Total assets", "total_assets"),
+    ("TOTAL ASSETS", "total_assets"),
     ("Total Liabilities", "total_liabilities"),
+    ("Total liabilities", "total_liabilities"),
+    ("TOTAL LIABILITIES", "total_liabilities"),
+    # Net Income
     ("Net Income", "net_income"),
+    ("Net income", "net_income"),
     ("Net Earnings", "net_income"),
+    ("Net earnings", "net_income"),
     ("Net Profit", "net_income"),
-    ("Total Revenue", "revenue"),
-    ("Net Revenue", "revenue"),
-    ("Revenue", "revenue"),
-    ("Net Sales", "revenue"),
+    ("NET INCOME", "net_income"),
+    ("Net income (loss)", "net_income"),
+    # Revenue (last — broadest match)
+    ("Total Net Revenue", "revenue"),
+    ("Total net revenue", "revenue"),
     ("Total Net Sales", "revenue"),
+    ("Total net sales", "revenue"),
+    ("Net Revenue", "revenue"),
+    ("Net revenue", "revenue"),
+    ("Net Sales", "revenue"),
+    ("Net sales", "revenue"),
+    ("Total Revenue", "revenue"),
+    ("Total revenue", "revenue"),
+    ("TOTAL REVENUE", "revenue"),
+    ("Revenue", "revenue"),
+    ("Revenues", "revenue"),
+    ("REVENUE", "revenue"),
+    ("Sales", "revenue"),
 ]
 
-# Pattern to match a financial number immediately following a keyword
-# Handles: 50,000  or  50,000.00  or  (50,000)  or  -50,000
-_NUMBER_PATTERN = re.compile(
-    r"[\t ]*:?[\t ]*\$?([\-\(]?[\d,]+(?:\.\d+)?\)?)",
-    re.IGNORECASE,
+# Robust number pattern: matches financial numbers in various formats
+# Handles: 50,000  |  50,000.00  |  (50,000)  |  -50,000  |  $50,000
+# Also matches: 394,328  |  1.29  |  (2,345.67)  |  $ 12,345
+_NUMBER_RE = re.compile(
+    r"""
+    \$?\s*                          # optional dollar sign + space
+    (\(?\s*-?\s*                    # optional opening paren or minus
+     \d[\d,]*                       # digits with optional commas
+     (?:\.\d+)?                     # optional decimal
+     \s*\)?)                        # optional closing paren
+    """,
+    re.VERBOSE,
+)
+
+# Pattern to find a number anywhere in a chunk of text (for flexible matching)
+_FIND_NUMBER_RE = re.compile(
+    r"""
+    \$?\s*                          # optional dollar sign
+    (\(?\s*-?\s*                    # optional paren/minus
+     \d[\d,]*                       # digits with commas
+     (?:\.\d+)?                     # optional decimal
+     \s*\)?)                        # optional closing paren
+    """,
+    re.VERBOSE,
 )
 
 
@@ -129,9 +181,12 @@ def _scan_context(context: str) -> dict[str, dict | None]:
     """
     Scan context text for financial keyword + value pairs.
 
-    Handles two common layouts:
-      1. Same-line: "Revenue: 50,000"
-      2. Next-line:  "Revenue\n50,000"  (common in PyMuPDF text-block output)
+    Handles multiple common layouts found in real financial PDFs:
+      1. Same-line colon:   "Revenue: 50,000"
+      2. Same-line tab:     "Revenue    50,000    45,000"
+      3. Next-line:         "Revenue\n50,000"
+      4. Spaced columns:   "Net sales                    394,328"
+      5. Markdown tables:  "| Revenue | 50,000 | 45,000 |"
 
     Returns a dict of {field_name: {value, unit, source_text} | None}.
     """
@@ -157,35 +212,58 @@ def _scan_context(context: str) -> dict[str, dict | None]:
         if not match:
             continue
 
-        # Search region: from end of keyword match, up to 300 chars
-        after_keyword = context[match.end() : match.end() + 300]
+        # Search region: from end of keyword match, up to 500 chars
+        search_end = min(len(context), match.end() + 500)
+        after_keyword = context[match.end():search_end]
 
-        # Try: number on the same line (after optional whitespace/colon)
-        same_line_end = after_keyword.find("\n")
-        same_line = after_keyword[:same_line_end] if same_line_end != -1 else after_keyword
-        num_match = _NUMBER_PATTERN.match(same_line)
+        # Split into individual lines and search each one for a number
+        # Apple 10-K format example:
+        #   Total net sales\n \n416,161 \n \n391,035
+        # So we need to skip blank lines and lines that only contain "$" or whitespace
+        lines = after_keyword.split("\n")
+        num_match = None
 
-        if not num_match:
-            # Try: number on the NEXT line ("Revenue\n50,000")
-            next_line_start = same_line_end + 1 if same_line_end != -1 else 0
-            next_line_region = after_keyword[next_line_start:]
-            next_line_end = next_line_region.find("\n")
-            next_line = next_line_region[:next_line_end] if next_line_end != -1 else next_line_region
-            num_match = _NUMBER_PATTERN.match(next_line)
+        for line in lines[:8]:  # Check up to 8 lines ahead
+            stripped = line.strip()
 
-            if not num_match:
-                # Try: number on the line after next (some PDFs insert blank lines)
-                after_next = next_line_region[next_line_end + 1:] if next_line_end != -1 else ""
-                after_next_end = after_next.find("\n")
-                after_next_line = after_next[:after_next_end] if after_next_end != -1 else after_next
-                num_match = _NUMBER_PATTERN.match(after_next_line)
+            # Skip empty lines, lines that are just "$" or "$ ", or section headers
+            if not stripped or stripped in ("$", "$ ") or stripped == " ":
+                continue
+
+            # Remove leading "$ " that Apple uses before numbers
+            cleaned_line = re.sub(r"^\s*\$\s*", "", stripped)
+
+            num_match = _FIND_NUMBER_RE.search(cleaned_line)
+            if num_match:
+                break
+
+            # Also try the original line (for formats like "$307,003")
+            num_match = _FIND_NUMBER_RE.search(stripped)
+            if num_match:
+                break
 
         if not num_match:
             continue
 
         raw_value = num_match.group(1).strip()
+
+        # Skip values that are clearly not financial (e.g., page numbers, years)
+        cleaned = raw_value.replace(",", "").replace("(", "").replace(")", "").replace("-", "").strip()
+        if not cleaned:
+            continue
+
+        try:
+            numeric_val = float(cleaned)
+        except ValueError:
+            continue
+
+        # Skip year-like values (2000-2100) or tiny page numbers
+        if 2000 <= numeric_val <= 2100:
+            continue
+
+        # Build source text snippet for provenance
         source_start = max(0, match.start() - 20)
-        source_end = min(len(context), match.end() + 80)
+        source_end = min(len(context), match.end() + 120)
         source_text = context[source_start:source_end].strip()
 
         result[field_name] = {

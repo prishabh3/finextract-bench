@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FinExtract-Bench</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f1117;
+            color: #e1e4e8;
+            min-height: 100vh;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #1a1e2e 0%, #0d1117 100%);
+            border-bottom: 1px solid #21262d;
+            padding: 20px 40px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .header h1 {
+            font-size: 22px;
+            font-weight: 700;
+            color: #58a6ff;
+        }
+
+        .header h1 span {
+            color: #8b949e;
+            font-weight: 400;
+            font-size: 14px;
+            margin-left: 10px;
+        }
+
+        .status-dot {
+            width: 8px; height: 8px;
+            background: #3fb950;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 6px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        .status-text { font-size: 13px; color: #8b949e; }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 30px 20px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 400px 1fr;
+            gap: 24px;
+        }
+
+        @media (max-width: 860px) {
+            .grid { grid-template-columns: 1fr; }
+        }
+
+        .card {
+            background: #161b22;
+            border: 1px solid #21262d;
+            border-radius: 10px;
+            padding: 24px;
+        }
+
+        .card-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #8b949e;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 18px;
+        }
+
+        /* Upload Zone */
+        .upload-zone {
+            border: 2px dashed #30363d;
+            border-radius: 10px;
+            padding: 36px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-bottom: 20px;
+        }
+
+        .upload-zone:hover, .upload-zone.dragover {
+            border-color: #58a6ff;
+            background: rgba(88, 166, 255, 0.05);
+        }
+
+        .upload-zone.has-file {
+            border-color: #3fb950;
+            background: rgba(63, 185, 80, 0.05);
+        }
+
+        .upload-icon {
+            font-size: 40px;
+            margin-bottom: 10px;
+        }
+
+        .upload-text {
+            font-size: 14px;
+            color: #8b949e;
+        }
+
+        .upload-text strong {
+            color: #58a6ff;
+        }
+
+        .file-name {
+            margin-top: 10px;
+            font-size: 13px;
+            color: #3fb950;
+            font-weight: 600;
+        }
+
+        /* Form */
+        .form-group {
+            margin-bottom: 14px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            color: #8b949e;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 10px 12px;
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            color: #e1e4e8;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .form-group input:focus, .form-group select:focus {
+            border-color: #58a6ff;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 12px;
+            background: #238636;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin-top: 8px;
+        }
+
+        .btn:hover { background: #2ea043; }
+
+        .btn:disabled {
+            background: #21262d;
+            color: #484f58;
+            cursor: not-allowed;
+        }
+
+        .btn.loading {
+            background: #1a1e2e;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn.loading::after {
+            content: '';
+            position: absolute;
+            top: 0; left: -100%;
+            width: 100%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(88,166,255,0.15), transparent);
+            animation: shimmer 1.5s infinite;
+        }
+
+        @keyframes shimmer {
+            100% { left: 100%; }
+        }
+
+        /* Results */
+        .results-placeholder {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 300px;
+            color: #484f58;
+        }
+
+        .results-placeholder .icon { font-size: 48px; margin-bottom: 12px; }
+        .results-placeholder p { font-size: 14px; }
+
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #21262d;
+        }
+
+        .result-company {
+            font-size: 18px;
+            font-weight: 700;
+            color: #e1e4e8;
+        }
+
+        .result-year {
+            font-size: 13px;
+            color: #8b949e;
+            background: #21262d;
+            padding: 3px 10px;
+            border-radius: 12px;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .badge.valid { background: rgba(63,185,80,0.15); color: #3fb950; }
+        .badge.invalid { background: rgba(248,81,73,0.15); color: #f85149; }
+        .badge.partial { background: rgba(210,153,34,0.15); color: #d29922; }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .metric-card {
+            background: #0d1117;
+            border: 1px solid #21262d;
+            border-radius: 8px;
+            padding: 14px;
+            transition: border-color 0.2s;
+        }
+
+        .metric-card:hover { border-color: #30363d; }
+
+        .metric-card.empty {
+            opacity: 0.4;
+        }
+
+        .metric-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: #8b949e;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            margin-bottom: 6px;
+        }
+
+        .metric-value {
+            font-size: 22px;
+            font-weight: 700;
+            color: #e1e4e8;
+        }
+
+        .metric-value.null {
+            color: #484f58;
+            font-size: 14px;
+            font-style: italic;
+        }
+
+        .metric-meta {
+            font-size: 11px;
+            color: #6e7681;
+            margin-top: 4px;
+        }
+
+        .extraction-info {
+            margin-top: 16px;
+            padding-top: 12px;
+            border-top: 1px solid #21262d;
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .info-chip {
+            font-size: 12px;
+            color: #8b949e;
+        }
+
+        .info-chip strong {
+            color: #c9d1d9;
+        }
+
+        .error-box {
+            background: rgba(248, 81, 73, 0.1);
+            border: 1px solid rgba(248, 81, 73, 0.3);
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 12px;
+        }
+
+        .error-box p {
+            color: #f85149;
+            font-size: 13px;
+        }
+
+        /* Validation Errors */
+        .val-errors {
+            margin-top: 12px;
+        }
+
+        .val-errors li {
+            font-size: 12px;
+            color: #d29922;
+            margin-bottom: 4px;
+            list-style: none;
+            padding-left: 16px;
+            position: relative;
+        }
+
+        .val-errors li::before {
+            content: '⚠';
+            position: absolute;
+            left: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📊 FinExtract-Bench <span>Financial Document Extraction Benchmark</span></h1>
+        <div>
+            <span class="status-dot"></span>
+            <span class="status-text">API Connected</span>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="grid">
+            <!-- Left: Upload Panel -->
+            <div>
+                <div class="card">
+                    <div class="card-title">Upload & Extract</div>
+
+                    <div class="upload-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+                        <div class="upload-icon">📄</div>
+                        <div class="upload-text">
+                            <strong>Click to upload</strong> or drag & drop<br>
+                            PDF files only
+                        </div>
+                        <div class="file-name" id="fileName"></div>
+                        <input type="file" id="fileInput" accept=".pdf" style="display:none">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Company Name</label>
+                        <input type="text" id="company" placeholder="Auto-detected from PDF">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Fiscal Year</label>
+                        <input type="number" id="fiscalYear" placeholder="Auto-detected from PDF">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Pipeline</label>
+                        <select id="pipeline">
+                            <option value="text_only">Text-Only (PyMuPDF)</option>
+                            <option value="layout_aware">Layout-Aware (Docling)</option>
+                            <option value="hybrid">Hybrid (Layout + Rules)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>LLM Provider</label>
+                        <select id="provider">
+                            <option value="mock">Mock (No API Key Needed)</option>
+                            <option value="openai">OpenAI</option>
+                            <option value="anthropic">Anthropic</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Model</label>
+                        <input type="text" id="model" placeholder="e.g. gpt-4o" value="mock-model">
+                    </div>
+
+                    <button class="btn" id="extractBtn" onclick="extract()" disabled>
+                        Extract Financial Data
+                    </button>
+                </div>
+            </div>
+
+            <!-- Right: Results Panel -->
+            <div>
+                <div class="card" id="resultsCard">
+                    <div class="card-title">Extraction Results</div>
+                    <div class="results-placeholder" id="placeholder">
+                        <div class="icon">📋</div>
+                        <p>Upload a PDF to see extracted metrics here</p>
+                    </div>
+                    <div id="results" style="display:none"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const fileNameEl = document.getElementById('fileName');
+        const extractBtn = document.getElementById('extractBtn');
+        let selectedFile = null;
+
+        // Drag & Drop
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            const file = e.dataTransfer.files[0];
+            if (file && file.type === 'application/pdf') {
+                setFile(file);
+            }
+        });
+
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files[0]) setFile(fileInput.files[0]);
+        });
+
+        async function setFile(file) {
+            selectedFile = file;
+            fileNameEl.textContent = '✓ ' + file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)';
+            dropZone.classList.add('has-file');
+            extractBtn.disabled = false;
+
+            // Auto-detect company name and fiscal year
+            const companyInput = document.getElementById('company');
+            const yearInput = document.getElementById('fiscalYear');
+            companyInput.value = 'Detecting...';
+            companyInput.style.color = '#58a6ff';
+            yearInput.value = '';
+
+            try {
+                const fd = new FormData();
+                fd.append('file', file);
+                const resp = await fetch('/extraction/detect-metadata', { method: 'POST', body: fd });
+                if (resp.ok) {
+                    const meta = await resp.json();
+                    companyInput.value = meta.company || file.name.split(/[_\-]/)[0].replace('.pdf','');
+                    companyInput.style.color = '#e1e4e8';
+                    if (meta.fiscal_year) {
+                        yearInput.value = meta.fiscal_year;
+                    } else {
+                        yearInput.value = new Date().getFullYear();
+                    }
+                } else {
+                    companyInput.value = file.name.split(/[_\-]/)[0].replace('.pdf','');
+                    companyInput.style.color = '#e1e4e8';
+                    yearInput.value = new Date().getFullYear();
+                }
+            } catch (err) {
+                companyInput.value = file.name.split(/[_\-]/)[0].replace('.pdf','');
+                companyInput.style.color = '#e1e4e8';
+                yearInput.value = new Date().getFullYear();
+            }
+        }
+
+        function formatNumber(val) {
+            if (val === null || val === undefined) return null;
+            if (Math.abs(val) >= 1e9) return '$' + (val / 1e9).toFixed(2) + 'B';
+            if (Math.abs(val) >= 1e6) return '$' + (val / 1e6).toFixed(2) + 'M';
+            if (Math.abs(val) >= 1e3) return '$' + (val / 1e3).toFixed(1) + 'K';
+            return '$' + val.toFixed(2);
+        }
+
+        function formatMetricName(name) {
+            return name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        }
+
+        async function extract() {
+            if (!selectedFile) return;
+
+            extractBtn.disabled = true;
+            extractBtn.classList.add('loading');
+            extractBtn.textContent = 'Extracting...';
+
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+            formData.append('company', document.getElementById('company').value);
+            formData.append('fiscal_year', document.getElementById('fiscalYear').value);
+            formData.append('pipeline', document.getElementById('pipeline').value);
+            formData.append('provider', document.getElementById('provider').value);
+            formData.append('model', document.getElementById('model').value);
+
+            try {
+                const resp = await fetch('/extraction/extract', { method: 'POST', body: formData });
+                const data = await resp.json();
+
+                if (!resp.ok) {
+                    showError(data.detail || 'Extraction failed');
+                    return;
+                }
+
+                showResults(data);
+            } catch (err) {
+                showError('Network error: ' + err.message);
+            } finally {
+                extractBtn.disabled = false;
+                extractBtn.classList.remove('loading');
+                extractBtn.textContent = 'Extract Financial Data';
+            }
+        }
+
+        function showError(msg) {
+            document.getElementById('placeholder').style.display = 'none';
+            const el = document.getElementById('results');
+            el.style.display = 'block';
+            el.innerHTML = `<div class="error-box"><p>❌ ${msg}</p></div>`;
+        }
+
+        function showResults(data) {
+            document.getElementById('placeholder').style.display = 'none';
+            const el = document.getElementById('results');
+            el.style.display = 'block';
+
+            const fields = ['revenue', 'net_income', 'operating_income', 'total_assets',
+                            'total_liabilities', 'cash_and_equivalents', 'eps'];
+
+            const statusClass = data.validation_status === 'valid' ? 'valid'
+                              : data.validation_status === 'partial' ? 'partial' : 'invalid';
+
+            let metricsHTML = '';
+            let extracted = 0;
+            for (const f of fields) {
+                const metric = data[f];
+                const hasValue = metric && metric.value !== null && metric.value !== undefined;
+                if (hasValue) extracted++;
+
+                if (hasValue) {
+                    const displayVal = f === 'eps' ? '$' + metric.value.toFixed(2) : formatNumber(metric.value);
+                    metricsHTML += `
+                        <div class="metric-card">
+                            <div class="metric-label">${formatMetricName(f)}</div>
+                            <div class="metric-value">${displayVal}</div>
+                            <div class="metric-meta">${metric.currency || ''} · ${metric.extraction_method || ''} · conf ${((metric.confidence || 0) * 100).toFixed(0)}%</div>
+                        </div>`;
+                } else {
+                    metricsHTML += `
+                        <div class="metric-card empty">
+                            <div class="metric-label">${formatMetricName(f)}</div>
+                            <div class="metric-value null">Not extracted</div>
+                        </div>`;
+                }
+            }
+
+            let valErrorsHTML = '';
+            if (data.validation_errors && data.validation_errors.length > 0) {
+                valErrorsHTML = `<ul class="val-errors">` +
+                    data.validation_errors.map(e => `<li>${e}</li>`).join('') + `</ul>`;
+            }
+
+            el.innerHTML = `
+                <div class="result-header">
+                    <div>
+                        <div class="result-company">${data.company}</div>
+                    </div>
+                    <div>
+                        <span class="result-year">FY ${data.fiscal_year}</span>
+                        <span class="badge ${statusClass}">${data.validation_status}</span>
+                    </div>
+                </div>
+                <div class="metrics-grid">${metricsHTML}</div>
+                ${valErrorsHTML}
+                <div class="extraction-info">
+                    <div class="info-chip"><strong>Pipeline:</strong> ${data.extraction_method}</div>
+                    <div class="info-chip"><strong>Fields:</strong> ${extracted}/${fields.length}</div>
+                    <div class="info-chip"><strong>Doc ID:</strong> ${(data.document_id || '').substring(0, 8)}…</div>
+                    <div class="info-chip"><strong>Time:</strong> ${new Date(data.extracted_at).toLocaleTimeString()}</div>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>

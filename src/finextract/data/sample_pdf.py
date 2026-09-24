@@ -25,6 +25,8 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+from finextract.config.settings import settings
+
 logger = logging.getLogger(__name__)
 
 
@@ -69,9 +71,7 @@ def create_sample_pdf(output_dir: Path | None = None) -> Path:
             ) from exc
 
     if output_dir is None:
-        # Default: data/sample relative to project root
-        project_root = Path(__file__).resolve().parents[4]
-        output_dir = project_root / "data" / "sample"
+        output_dir = settings.sample_dir
 
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
